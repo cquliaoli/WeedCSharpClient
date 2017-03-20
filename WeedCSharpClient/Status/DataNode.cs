@@ -2,9 +2,9 @@
 {
     public class DataNode : AbstractNode
     {
-        public string PublicUrl;
-        public string Url;
-        public int Volumes;
+        public string PublicUrl { get; set; }
+        public string Url { get; set; }
+        public int Volumes { get; set; }
 
         public Location AsLocation()
         {

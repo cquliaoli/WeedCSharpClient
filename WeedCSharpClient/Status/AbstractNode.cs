@@ -2,7 +2,7 @@
 {
     public abstract class AbstractNode
     {
-        public int Free;
-        public int Max;
+        public int Free { get; set; }
+        public int Max { get; set; }
     }
 }

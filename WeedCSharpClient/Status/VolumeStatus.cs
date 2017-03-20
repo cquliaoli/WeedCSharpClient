@@ -4,7 +4,7 @@ namespace WeedCSharpClient.Status
 {
     public class VolumeStatus
     {
-        public string Version;
-        public List<Volume> Volumes;
+        public string Version { get; set; }
+        public List<Volume> Volumes { get; set; }
     }
 }

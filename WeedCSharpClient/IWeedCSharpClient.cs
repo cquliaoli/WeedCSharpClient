@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.IO;
-
+using System.Threading.Tasks;
 using WeedCSharpClient.Net;
 using WeedCSharpClient.Status;
 
@@ -11,22 +11,23 @@ namespace WeedCSharpClient
     /// </summary>
     public interface IWeedCSharpClient
     {
-        Assignation Assign(AssignParams assignParams);
+        Task<Assignation> Assign(AssignParams assignParams);
 
-        WriteResult Write(WeedFSFile weedFSFile, Location location, FileInfo file);
+        Task<WriteResult> Write(WeedFSFile weedFSFile, Location location, FileInfo file);
 
-        WriteResult Write(WeedFSFile file, Location location, byte[] dataToUpload, string fileName);
+        Task<WriteResult> Write(WeedFSFile file, Location location, byte[] dataToUpload, string fileName);
 
-        WriteResult Write(WeedFSFile file, Location location, Stream inputToUpload, string fileName);
+        Task<WriteResult> Write(WeedFSFile file, Location location, Stream inputToUpload, string fileName);
 
-        void Delete(string url);
+        Task<bool> Delete(string url);
 
-        List<Location> Lookup(long volumeId);
+        Task<List<Location>> Lookup(long volumeId);
 
-        Stream Read(WeedFSFile file, Location location);
+        ///    Stream Read(WeedFSFile file, Location location);
+        Task<ReadResult> ReadFile(string url);
 
-        MasterStatus GetMasterStatus();
+        Task<MasterStatus> GetMasterStatus();
 
-        VolumeStatus GetVolumeStatus(Location location);
+        Task<VolumeStatus> GetVolumeStatus(Location location);
     }
 }

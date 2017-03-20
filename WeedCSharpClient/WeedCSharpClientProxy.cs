@@ -1,19 +1,38 @@
 ﻿using System;
 using System.Configuration;
 using System.IO;
-
+using System.Threading.Tasks;
 using WeedCSharpClient.Net;
+using WeedCSharpClient.Status;
 
 namespace WeedCSharpClient
 {
     public interface IWeedCSharpClientSubject 
     {
-        WriteResult Upload(byte[] buffer, string fileName = null, string fid = null, 
+        Task<WriteResult> Upload(byte[] buffer, string fileName = null, string fid = null, 
             ReplicationStrategy replicationStrategy = ReplicationStrategy.None);
-        WriteResult Upload(Stream stream, string fileName = null, string fid = null, 
+        Task<WriteResult> Upload(Stream stream, string fileName = null, string fid = null, 
             ReplicationStrategy replicationStrategy = ReplicationStrategy.None);
-        void Delete(string fid);
-        string Lookup(long volumeId);
+        Task<bool> Delete(string fid);
+        Task<string> Lookup(long volumeId);
+        /// <summary>
+        /// 读取文件
+        /// </summary>
+        /// <param name="url"></param>
+        /// <returns></returns>
+        Task<ReadResult> Read(string url);
+        /// <summary>
+        /// master状态
+        /// </summary>
+        /// <returns></returns>
+        Task<MasterStatus> GetMasterStatus();
+       /// <summary>
+       /// volume状态
+       /// </summary>
+       /// <param name="location"></param>
+       /// <returns></returns>
+
+        Task<VolumeStatus> GetVolumeStatus(Location location);
     }
 
     //Singleton
@@ -32,11 +51,21 @@ namespace WeedCSharpClient
         /// <param name="fid">fid</param>
         /// <param name="replicationStrategy">replication strategy</param>
         /// <returns>Write Result</returns>
-        public WriteResult Upload(byte[] buffer, string fileName = null, string fid = null, 
+        public async Task<WriteResult> Upload(byte[] buffer, string fileName = null, string fid = null, 
             ReplicationStrategy replicationStrategy = ReplicationStrategy.None)
         {
-            var assignResult = _weedCSharpClient.Assign(new AssignParams(replicationStrategy));
-            return _weedCSharpClient.Write(assignResult.WeedFSFile, assignResult.Location, buffer, fileName);
+            WriteResult writeResult;
+            try
+            {
+                var assignResult = await _weedCSharpClient.Assign(new AssignParams(replicationStrategy));
+                writeResult = await _weedCSharpClient.Write(assignResult.WeedFSFile, assignResult.Location, buffer, fileName);
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return writeResult;
         }
         /// <summary>
         /// store or update the file content with stream
@@ -46,20 +75,42 @@ namespace WeedCSharpClient
         /// <param name="fid">fid</param>
         /// <param name="replicationStrategy">replication strategy</param>
         /// <returns>Write Result</returns>
-        public WriteResult Upload(Stream stream, string fileName = null, string fid = null, 
+        public async Task<WriteResult> Upload(Stream stream, string fileName = null, string fid = null, 
             ReplicationStrategy replicationStrategy = ReplicationStrategy.None)
         {
-            var assignResult = _weedCSharpClient.Assign(new AssignParams(replicationStrategy));
-            return _weedCSharpClient.Write(assignResult.WeedFSFile, assignResult.Location, stream, fileName);
+            WriteResult writeResult;
+            try
+            {
+                var assignResult = await _weedCSharpClient.Assign(new AssignParams(replicationStrategy));
+                writeResult = await _weedCSharpClient.Write(assignResult.WeedFSFile, assignResult.Location, stream, fileName);
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return writeResult;
         }
 
         /// <summary>
         /// delete the file
         /// </summary>
-        /// <param name="url">url</param>
-        public void Delete(string url)
+        /// <param name="fid">fid</param>
+        public async Task<bool> Delete(string fid)
         {
-            _weedCSharpClient.Delete(url);
+            bool result = false;
+            try
+            {
+                var vid = long.Parse(fid.Split(',')[0]);
+                var url = await this.Lookup(vid);
+                result = await _weedCSharpClient.Delete(string.Format("{0}/{1}", url,fid));
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return result;
         }
 
         /// <summary>
@@ -67,43 +118,211 @@ namespace WeedCSharpClient
         /// </summary>
         /// <param name="volumeId">volume id</param>
         /// <returns>url</returns>
-        public string Lookup(long volumeId)
+        public async Task<string> Lookup(long volumeId)
         {
-            var locations = _weedCSharpClient.Lookup(volumeId);
-            if (locations.Count > 0)
+            string location;
+            try
             {
-                return locations[0].publicUrl;
+                var locations = await _weedCSharpClient.Lookup(volumeId);
+                if (locations.Count > 0)
+                {
+                    location = locations[0].publicUrl;
+                }
+                else
+                {
+                    throw new ArgumentException("There is no location", nameof(locations));
+                }
             }
-            else
+            catch (Exception)
             {
-                throw new ArgumentException("There is no location", nameof(locations));
+
+                throw;
             }
+            return location;
+        }
+        /// <summary>
+        /// 读取文件
+        /// </summary>
+        /// <param name="fid">4,10011dfd33d902</param>
+        /// <returns></returns>
+        public async Task<ReadResult> Read(string fid)
+        {
+            ReadResult readResult;
+            try
+            {
+                var vid = long.Parse(fid.Split(',')[0]);
+                var url = await this.Lookup(vid);
+                readResult = await _weedCSharpClient.ReadFile(string.Format("{0}/{1}", url, fid));
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return readResult;
+        }
+
+        public async Task<MasterStatus> GetMasterStatus()
+        {
+            MasterStatus masterStatus;
+            try
+            {
+                masterStatus = await _weedCSharpClient.GetMasterStatus();
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return masterStatus;
+        }
+
+        public async Task<VolumeStatus> GetVolumeStatus(Location location)
+        {
+            VolumeStatus volumeStatus;
+
+            try
+            {
+                volumeStatus = await _weedCSharpClient.GetVolumeStatus(location);
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return volumeStatus;
         }
     }
 
     //Proxy
     public class WeedCSharpClientProxy : IWeedCSharpClientSubject 
     {
-        public WriteResult Upload(byte[] buffer, string fileName = null, string fid = null, 
+        public async Task<WriteResult> Upload(byte[] buffer, string fileName = null, string fid = null, 
             ReplicationStrategy replicationStrategy = ReplicationStrategy.None)
         {
-            return WeedCSharpClientSubject.Instance.Upload(buffer, fileName, fid, replicationStrategy);
+            WriteResult writeResult;
+
+            try
+            {
+                writeResult = await WeedCSharpClientSubject.Instance.Upload(buffer, fileName, fid, replicationStrategy);
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return writeResult;
         }
 
-        public WriteResult Upload(Stream stream, string fileName = null, string fid = null, 
+        public async Task<WriteResult> Upload(Stream stream, string fileName = null, string fid = null, 
             ReplicationStrategy replicationStrategy = ReplicationStrategy.None)
         {
-            return WeedCSharpClientSubject.Instance.Upload(stream, fileName, fid, replicationStrategy);
-        }
+            WriteResult writeResult;
+            try
+            {
+                writeResult = await WeedCSharpClientSubject.Instance.Upload(stream, fileName, fid, replicationStrategy);
+            }
+            catch (Exception)
+            {
 
-        public void Delete(string fid)
-        {
-            WeedCSharpClientSubject.Instance.Delete(fid);
+                throw;
+            }
+            return writeResult;
         }
-
-        public string Lookup(long volumeId)
+        /// <summary>
+        /// 删除  通过fid删除
+        /// </summary>
+        /// <param name="fid"></param>
+        /// <returns></returns>
+        public async Task<bool> Delete(string fid)
         {
-            return WeedCSharpClientSubject.Instance.Lookup(volumeId);
+            bool result = false;
+            try
+            {
+                result = await WeedCSharpClientSubject.Instance.Delete(fid);
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return result;
+        }
+        /// <summary>
+        /// 通过volumeId查询localtion
+        /// </summary>
+        /// <param name="volumeId"></param>
+        /// <returns></returns>
+        public async Task<string> Lookup(long volumeId)
+        {
+            string localtion;
+
+            try
+            {
+                localtion = await WeedCSharpClientSubject.Instance.Lookup(volumeId);
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return localtion;
+        }
+        /// <summary>
+        /// 通过fid获取文件 1,10011dfd33d902
+        /// </summary>
+        /// <param name="fid"></param>
+        /// <returns></returns>
+        public async Task<ReadResult> Read(string fid)
+        {
+            ReadResult readResult;
+            try
+            {
+                readResult = await WeedCSharpClientSubject.Instance.Read(fid);
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return readResult;
+        }
+        /// <summary>
+        /// 获得master状态
+        /// </summary>
+        /// <returns></returns>
+        public async Task<MasterStatus> GetMasterStatus()
+        {
+            MasterStatus masterStatus;
+            try
+            {
+                masterStatus = await WeedCSharpClientSubject.Instance.GetMasterStatus();
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return masterStatus;
+        }
+        /// <summary>
+        /// 获得volume状态
+        /// </summary>
+        /// <param name="location"></param>
+        /// <returns></returns>
+        public async Task<VolumeStatus> GetVolumeStatus(Location location)
+        {
+            VolumeStatus volumeStatus;
+            try
+            {
+                volumeStatus = await WeedCSharpClientSubject.Instance.GetVolumeStatus(location);
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return volumeStatus;
         }
     }
 }

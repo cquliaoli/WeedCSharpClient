@@ -4,8 +4,8 @@ namespace WeedCSharpClient.Status
 {
     public class Topology : AbstractNode
     {
-        public List<DataCenter> DataCenters;
-        public List<Layout> layouts;
+        public List<DataCenter> DataCenters { get; set; }
+        public List<Layout> layouts { get; set; }
         private Stats _stats;
 
         public int GetDataCenterCount()
@@ -18,7 +18,37 @@ namespace WeedCSharpClient.Status
 
             return _stats.DcCount;
         }
+        /// <summary>
+        /// 得到所有卷信息
+        /// </summary>
+        /// <returns></returns>
+        public List<Location>GetVolumesLocations()
+        {
+            List<Location> locations = new List<Location>();
+            if (DataCenters == null)
+            {
+                return locations;
+            }
+            foreach (var dc in DataCenters)
+            {
+                if (dc.Racks != null)
+                {
+                    foreach (var rack in dc.Racks)
+                    {
+                        if(rack.DataNodes!=null)
+                        {
+                            foreach (var datanode in rack.DataNodes)
+                            {
+                                locations.Add(datanode.AsLocation());
 
+                            }
+                        }
+                        
+                    }
+                }
+            }
+            return locations;
+        }
         public int GetRackCount()
         {
             if (_stats == null)

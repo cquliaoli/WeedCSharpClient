@@ -13,6 +13,7 @@ using WeedCSharpClient.Net;
 using WeedCSharpClient.Status;
 
 using ServiceStack.Text;
+using System.Threading.Tasks;
 
 namespace WeedCSharpClient
 {
@@ -28,8 +29,13 @@ namespace WeedCSharpClient
         }
 
         #region Implement IWeedCSharpClient
+        /// <summary>
+        /// 异步返回分配id
+        /// </summary>
+        /// <param name="assignParams"></param>
+        /// <returns></returns>
 
-        public Assignation Assign(AssignParams assignParams)
+        public async Task<Assignation> Assign(AssignParams assignParams)
         {
             var url = new StringBuilder(new Uri(_masterUri, "/dir/assign").AbsoluteUri);
             url.Append("?count=").Append(assignParams.VersionCount);
@@ -44,65 +50,92 @@ namespace WeedCSharpClient
             {
                 url.Append("&collection=").Append(assignParams.Collection);
             }
-
-            using (var response = _httpClient.GetAsync(url.ToString()))
+            Assignation assignation;
+            try
             {
-                var content = response.Result.Content.ReadAsStringAsync().Result;
+                var response = await _httpClient.GetAsync(url.ToString());
+                var content = await response.Content.ReadAsStringAsync();
                 var result = JsonSerializer.DeserializeFromString<AssignResult>(content);
-                
                 if (!string.IsNullOrWhiteSpace(result.error))
                 {
                     throw new WeedFSException(result.error);
                 }
-
-                return new Assignation(result);
+                assignation = new Assignation(result);
             }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return assignation;
         }
 
-        public WriteResult Write(WeedFSFile file, Location location, FileInfo fileToUpload)
+        public async Task<WriteResult> Write(WeedFSFile file, Location location, FileInfo fileToUpload)
         {
+            WriteResult writeReuslt;
             if (fileToUpload.Length == 0)
             {
                 throw new WeedFSException("Cannot write a 0-length file");
             }
-
-            return Write(file, location, fileToUpload.Name, fileToUpload);
+            writeReuslt = await Write(file, location, fileToUpload.Name, fileToUpload);
+            return writeReuslt;
         }
 
-        public WriteResult Write(WeedFSFile file, Location location, byte[] dataToUpload, string fileName)
+        public async Task<WriteResult> Write(WeedFSFile file, Location location, byte[] dataToUpload, string fileName)
         {
+            WriteResult writeReuslt;
             if (dataToUpload.Length == 0)
             {
                 throw new WeedFSException("Cannot write a 0-length data");
             }
-
-            return Write(file, location, fileName, null, dataToUpload);
+            writeReuslt= await Write(file, location, fileName, null, dataToUpload);
+            return writeReuslt;
         }
 
-        public WriteResult Write(WeedFSFile file, Location location, Stream inputToUpload, string fileName)
+        public async Task<WriteResult> Write(WeedFSFile file, Location location, Stream inputToUpload, string fileName)
         {
-            return Write(file, location, fileName, null, null, inputToUpload);
+            WriteResult writeReuslt= await Write(file, location, fileName, null, null, inputToUpload);
+            return writeReuslt;
         }
-
-        public void Delete(string url)
+        /// <summary>
+        /// 删除文件
+        /// </summary>
+        /// <param name="url"></param>
+        /// <returns></returns>
+        public async Task<bool> Delete(string url)
         {
-            using (var response = _httpClient.DeleteAsync(url))
+            try
             {
-                var result = response.Result;
-                var statusCode = result.StatusCode;
-
-                if (statusCode < HttpStatusCode.OK || statusCode > HttpStatusCode.PartialContent)
+                var absoluteUrl = new StringBuilder();
+                if (!url.Contains("http"))
+                {
+                    absoluteUrl.Append("http://");
+                }
+                absoluteUrl.Append(url);
+                var response = await _httpClient.DeleteAsync(absoluteUrl.ToString());
+                if (response.StatusCode < HttpStatusCode.OK || response.StatusCode > HttpStatusCode.PartialContent)
                 {
                     var index = url.LastIndexOf('/') + 1;
                     var fid = url.Substring(index);
-                    throw new WeedFSException($"Error deleting file {fid} on {url}: {statusCode} {result.ReasonPhrase}");
+                    throw new WeedFSException($"Error deleting file {fid} on {url}: {response.StatusCode} {response.ReasonPhrase}");
                 }
+                return true;
+            }
+            catch (Exception)
+            {
+
+                throw;
             }
         }
-
-        public List<Location> Lookup(long volumeId)
+        /// <summary>
+        /// 查找location
+        /// </summary>
+        /// <param name="volumeId"></param>
+        /// <returns></returns>
+        public async Task<List<Location>> Lookup(long volumeId)
         {
-            var locations = LookupCache?.Lookup(volumeId);
+            List<Location> locations;
+            locations = LookupCache?.Lookup(volumeId);
             if (locations != null)
             {
                 return locations;
@@ -110,23 +143,86 @@ namespace WeedCSharpClient
 
             var url = new StringBuilder(new Uri(_masterUri, "/dir/lookup").AbsoluteUri);
             url.Append("?volumeId=").Append(volumeId);
-
-            using (var response = _httpClient.GetAsync(url.ToString()))
+            try
             {
-                var content = response.Result.Content.ReadAsStringAsync().Result;
-                var result = JsonSerializer.DeserializeFromString<LookupResult>(content);       
-
+                var response = await _httpClient.GetAsync(url.ToString());
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.DeserializeFromString<LookupResult>(content);
                 if (!string.IsNullOrWhiteSpace(result.error))
                 {
                     throw new WeedFSException(result.error);
                 }
 
                 LookupCache?.SetLocation(volumeId, result.locations);
-
-                return result.locations;
+                locations = result.locations;
             }
-        }
+            catch (Exception)
+            {
 
+                throw;
+            }
+            return locations;
+        }
+        /// <summary>
+        /// 下载
+        /// </summary>
+        /// <param name="url"></param>
+        /// <returns></returns>
+        public async Task<ReadResult> ReadFile(string url)
+        {
+            var absoluteUrl = new StringBuilder();
+            if (!url.Contains("http"))
+            {
+                absoluteUrl.Append("http://");
+            }
+            absoluteUrl.Append(url);
+            ReadResult rr=new ReadResult();
+            var cts = new CancellationTokenSource();
+            try
+            {
+                var response = await _httpClient.GetAsync(absoluteUrl.ToString(), cts.Token);
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    cts.Cancel();
+
+                    throw new WeedFSFileNotFoundException(url);
+                }
+                if (response.StatusCode != HttpStatusCode.OK)
+                {
+                    
+                    throw new WeedFSException($"Error reading file  on {url}: {response.StatusCode} {response.ReasonPhrase}");
+                }
+                foreach (var header in response.Content.Headers)
+                {
+
+                    Console.WriteLine(header.Key + ":" + FormatValue(header.Value));
+                }
+                rr.filename = response.Content.Headers.ContentType.MediaType;
+                var mediaType = response.Content.Headers.ContentType;
+
+                ContentDispositionHeaderValue contentDispositionHeaderValue = response.Content.Headers.ContentDisposition;
+                if (contentDispositionHeaderValue != null)
+                {
+                    rr.filename = contentDispositionHeaderValue.FileName;
+                }
+                rr.stream = response.Content.ReadAsStreamAsync().Result;
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return rr;
+        }
+        string FormatValue(object obj)
+        {
+            if (obj is Array)
+            {
+                return String.Join(", ", (object[])obj);
+            }
+            return obj == null ? "null" : obj.ToString();
+        }
+        [Obsolete]
         public Stream Read(WeedFSFile file, Location location)
         {
             var url = new StringBuilder();
@@ -166,26 +262,30 @@ namespace WeedCSharpClient
             }
         }
 
-        public MasterStatus GetMasterStatus()
+        public async Task<MasterStatus> GetMasterStatus()
         {
             var url = new Uri(_masterUri, "/dir/status").AbsoluteUri;
-
-            using (var response = _httpClient.GetAsync(url))
+            MasterStatus masterStatus;
+            try
             {
-                var result = response.Result;
-                var statusCode = result.StatusCode;
-
-                if (statusCode != HttpStatusCode.OK)
+                var response = await _httpClient.GetAsync(url);
+                if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new IOException("Not 200 status recieved for master status url: " + url);
                 }
-
-                var content = result.Content.ReadAsStringAsync().Result;
-                return JsonSerializer.DeserializeFromString<MasterStatus>(content);
+                var result = await response.Content.ReadAsStringAsync();
+                
+                masterStatus=JsonSerializer.DeserializeFromString<MasterStatus>(result);
             }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return masterStatus;
         }
 
-        public VolumeStatus GetVolumeStatus(Location location)
+        public async Task<VolumeStatus> GetVolumeStatus(Location location)
         {
             var url = new StringBuilder();
             if (!location.publicUrl.Contains("http"))
@@ -195,18 +295,23 @@ namespace WeedCSharpClient
             url.Append(location.publicUrl).Append("/status");
 
             var urlStr = url.ToString();
-            using (var response = _httpClient.GetAsync(urlStr))
+            VolumeStatus volumeStatus;
+            try
             {
-                var result = response.Result;
-                var statusCode = result.StatusCode;
-                if (statusCode != HttpStatusCode.OK)
+                var response = await _httpClient.GetAsync(urlStr);
+                if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new IOException("Not 200 status recieved for master status url: " + urlStr);
                 }
-
-                var content = result.Content.ReadAsStringAsync().Result;
-                return JsonSerializer.DeserializeFromString<VolumeStatus>(content);
+                var content = response.Content.ReadAsStringAsync().Result;
+                volumeStatus=JsonSerializer.DeserializeFromString<VolumeStatus>(content);
             }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return volumeStatus;
         }
 
         #endregion
@@ -222,10 +327,20 @@ namespace WeedCSharpClient
                 ? fileName.Substring(0, 255)
                 : fileName;
         }
-
-        private WriteResult Write(WeedFSFile file, Location location, string fileName = null, FileInfo fileToUpload = null,
+        /// <summary>
+        /// 异步上传
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="location"></param>
+        /// <param name="fileName"></param>
+        /// <param name="fileToUpload"></param>
+        /// <param name="dataToUpload"></param>
+        /// <param name="inputToUpload"></param>
+        /// <returns></returns>
+        private async Task<WriteResult> Write(WeedFSFile file, Location location, string fileName = null, FileInfo fileToUpload = null,
             byte[] dataToUpload = null, Stream inputToUpload = null)
         {
+            WriteResult writeResult;
             var url = new StringBuilder();
             if (!location.publicUrl.Contains("http"))
             {
@@ -259,29 +374,37 @@ namespace WeedCSharpClient
             }
 
             var multipart = new MultipartFormDataContent();
+            var ContentDisposition = new ContentDispositionHeaderValue("form-data");
+            ContentDisposition.FileName = fileName;
             multipart.Add(new ByteArrayContent(buffer)
-                {
-                    Headers =
+            {
+                Headers =
                     {
                         ContentType = new MediaTypeHeaderValue("application/octet-stream"),
-                        ContentDisposition = new ContentDispositionHeaderValue("form-data")
+                        ContentDisposition =ContentDisposition
                     }
                 }, "file", SanitizeFileName(fileName));
 
             var fileUrl = url.ToString();
-            using (var response = _httpClient.PostAsync(fileUrl, multipart))
+            try
             {
-                var content = response.Result.Content.ReadAsStringAsync().Result;
-                var result = JsonSerializer.DeserializeFromString<WriteResult>(content);
-                result.url = fileUrl;
+                var response = await _httpClient.PostAsync(fileUrl, multipart);
+                response.EnsureSuccessStatusCode();
+                var content = await response.Content.ReadAsStringAsync();
+                writeResult = JsonSerializer.DeserializeFromString<WriteResult>(content);
+                writeResult.url = fileUrl;
 
-                if (!string.IsNullOrWhiteSpace(result.error))
+                if (!string.IsNullOrWhiteSpace(writeResult.error))
                 {
-                    throw new WeedFSException(result.error);
+                    throw new WeedFSException(writeResult.error);
                 }
-
-                return result;
             }
+            catch (Exception)
+            {
+
+                throw;
+            }
+            return writeResult;
         }
     }
 }

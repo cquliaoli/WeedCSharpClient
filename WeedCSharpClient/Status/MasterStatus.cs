@@ -2,7 +2,7 @@
 {
     public class MasterStatus
     {
-        public Topology Topology;
-        public string Version;
+        public Topology Topology { get; set; }
+        public string Version { get; set; }
     }
 }

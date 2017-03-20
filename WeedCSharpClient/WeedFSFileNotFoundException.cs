@@ -6,5 +6,7 @@
 
         public WeedFSFileNotFoundException(WeedFSFile file, Location location)
             : base(file.Fid + " not found on " + location.publicUrl) { }
+        public WeedFSFileNotFoundException(string url) :
+            base(url + "   not found"){ }
     }
 }
