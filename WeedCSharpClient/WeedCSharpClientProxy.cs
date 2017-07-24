@@ -18,9 +18,15 @@ namespace WeedCSharpClient
         /// <summary>
         /// 读取文件
         /// </summary>
+        /// <param name="fileId"></param>
+        /// <returns></returns>
+        Task<ReadResult> Read(string fileId);
+        /// <summary>
+        /// 通过文件url读取
+        /// </summary>
         /// <param name="url"></param>
         /// <returns></returns>
-        Task<ReadResult> Read(string url);
+        Task<ReadResult> ReadByUrlAsync(string url);
         /// <summary>
         /// master状态
         /// </summary>
@@ -34,14 +40,13 @@ namespace WeedCSharpClient
 
         Task<VolumeStatus> GetVolumeStatus(Location location);
     }
-
     //Singleton
     internal sealed class WeedCSharpClientSubject : IWeedCSharpClientSubject
     {
         private WeedCSharpClientSubject() { }
         public static readonly WeedCSharpClientSubject Instance = new WeedCSharpClientSubject();
 
-        private readonly WeedCSharpClientImpl _weedCSharpClient = new WeedCSharpClientImpl(new Uri(ConfigurationManager.AppSettings["WeedMasterUrl"]));
+        private readonly WeedCSharpClientImpl _weedCSharpClient = new WeedCSharpClientImpl(new Uri(WeedCSharpClient.Properties.Settings.Default.WeedMasterUrl));
 
         /// <summary>
         /// store or update the file content with byte array
@@ -103,7 +108,7 @@ namespace WeedCSharpClient
             {
                 var vid = long.Parse(fid.Split(',')[0]);
                 var url = await this.Lookup(vid);
-                result = await _weedCSharpClient.Delete(string.Format("{0}/{1}", url,fid));
+                result = await _weedCSharpClient.Delete($"{url}/{fid}");
             }
             catch (Exception)
             {
@@ -152,12 +157,34 @@ namespace WeedCSharpClient
             {
                 var vid = long.Parse(fid.Split(',')[0]);
                 var url = await this.Lookup(vid);
-                readResult = await _weedCSharpClient.ReadFile(string.Format("{0}/{1}", url, fid));
+                readResult = await _weedCSharpClient.ReadFile($"{url}/{fid}");
+                if (!string.IsNullOrEmpty(readResult.filename))
+                {
+                    readResult.filename = Path.Combine(fid, Path.GetExtension(readResult.filename));
+                }
             }
             catch (Exception)
             {
 
                 throw;
+            }
+            return readResult;
+        }
+        /// <summary>
+        /// 通过url读取文件
+        /// </summary>
+        /// <param name="url"></param>
+        /// <returns></returns>
+        public async Task<ReadResult> ReadByUrlAsync(string url)
+        {
+            ReadResult readResult;
+            try
+            {
+            	readResult = await _weedCSharpClient.ReadFile(url);
+            }
+            catch (System.Exception ex)
+            {
+                throw ex;
             }
             return readResult;
         }
@@ -193,7 +220,6 @@ namespace WeedCSharpClient
             return volumeStatus;
         }
     }
-
     //Proxy
     public class WeedCSharpClientProxy : IWeedCSharpClientSubject 
     {
@@ -282,11 +308,25 @@ namespace WeedCSharpClient
             }
             catch (Exception)
             {
-
                 throw;
             }
             return readResult;
         }
+
+        public async Task<ReadResult> ReadByUrlAsync(string url)
+        {
+            ReadResult readResult;
+            try
+            {
+                readResult = await WeedCSharpClientSubject.Instance.ReadByUrlAsync(url);
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+            return readResult;
+        }
+
         /// <summary>
         /// 获得master状态
         /// </summary>
@@ -300,7 +340,6 @@ namespace WeedCSharpClient
             }
             catch (Exception)
             {
-
                 throw;
             }
             return masterStatus;
@@ -319,7 +358,6 @@ namespace WeedCSharpClient
             }
             catch (Exception)
             {
-
                 throw;
             }
             return volumeStatus;

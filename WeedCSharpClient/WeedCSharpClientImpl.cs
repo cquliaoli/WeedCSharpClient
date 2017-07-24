@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -14,6 +15,7 @@ using WeedCSharpClient.Status;
 
 using ServiceStack.Text;
 using System.Threading.Tasks;
+using System.Web;
 
 namespace WeedCSharpClient
 {
@@ -176,7 +178,7 @@ namespace WeedCSharpClient
                 absoluteUrl.Append("http://");
             }
             absoluteUrl.Append(url);
-            ReadResult rr=new ReadResult();
+            ReadResult readResult=new ReadResult();
             var cts = new CancellationTokenSource();
             try
             {
@@ -192,27 +194,56 @@ namespace WeedCSharpClient
                     
                     throw new WeedFSException($"Error reading file  on {url}: {response.StatusCode} {response.ReasonPhrase}");
                 }
-                foreach (var header in response.Content.Headers)
+                IEnumerable<string> contentDisposition;
+                if (response.Content.Headers.TryGetValues("Content-Disposition", out contentDisposition))
                 {
-
+                    var contentDispostions = contentDisposition as string[] ?? contentDisposition.ToArray();
+                    foreach (var s in contentDispostions)
+                    {
+                        string temp = s.Replace("\"", "");
+                        int equalIndex = temp.IndexOf("=", StringComparison.Ordinal);
+                        if (temp.Contains("filename")&& equalIndex!=-1)
+                        {
+                            temp = temp.Substring(equalIndex+1);
+                            readResult.filename = temp;
+                            break;
+                        }
+                    }
+                    
+                }
+                /*foreach (var header in response.Content.Headers)
+                {
+                    
+                    if (header.Key.Equals("Content-Disposition"))
+                    {
+                        ContentDispositionHeaderValue headerValue = null;
+                        ContentDispositionHeaderValue.TryParse(header.Value.FirstOrDefault(), out headerValue);
+                        readResult.filename = header.Value.FirstOrDefault();
+                    }
                     Console.WriteLine(header.Key + ":" + FormatValue(header.Value));
-                }
-                rr.filename = response.Content.Headers.ContentType.MediaType;
-                var mediaType = response.Content.Headers.ContentType;
-
+                }*/
                 ContentDispositionHeaderValue contentDispositionHeaderValue = response.Content.Headers.ContentDisposition;
-                if (contentDispositionHeaderValue != null)
+                if (contentDispositionHeaderValue != null&&string.IsNullOrEmpty(readResult.filename))
                 {
-                    rr.filename = contentDispositionHeaderValue.FileName;
+                    readResult.filename = contentDispositionHeaderValue.FileName;
                 }
-                rr.stream = response.Content.ReadAsStreamAsync().Result;
+                if (string.IsNullOrEmpty(readResult.filename))
+                {
+                    readResult.filename = response.Content.Headers.ContentType.MediaType;
+                }
+                var mediaType = response.Content.Headers.ContentType;
+                /*if (!string.IsNullOrEmpty(readResult.filename))
+                {
+                    readResult.filename = Uri.UnescapeDataString(readResult.filename);
+                }*/
+                readResult.stream = response.Content.ReadAsStreamAsync().Result;
             }
             catch (Exception)
             {
 
                 throw;
             }
-            return rr;
+            return readResult;
         }
         string FormatValue(object obj)
         {
