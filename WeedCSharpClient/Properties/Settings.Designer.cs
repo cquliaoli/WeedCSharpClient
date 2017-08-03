@@ -25,7 +25,7 @@ namespace WeedCSharpClient.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("http://192.168.1.119:9333")]
+        [global::System.Configuration.DefaultSettingValueAttribute("http://192.168.1.60:9333")]
         public string WeedMasterUrl {
             get {
                 return ((string)(this["WeedMasterUrl"]));

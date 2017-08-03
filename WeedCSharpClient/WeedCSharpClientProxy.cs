@@ -160,7 +160,7 @@ namespace WeedCSharpClient
                 readResult = await _weedCSharpClient.ReadFile($"{url}/{fid}");
                 if (!string.IsNullOrEmpty(readResult.filename))
                 {
-                    readResult.filename = Path.Combine(fid, Path.GetExtension(readResult.filename));
+                    readResult.filename = $"{fid}{Path.GetExtension(readResult.filename)}";
                 }
             }
             catch (Exception)

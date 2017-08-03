@@ -183,6 +183,7 @@ namespace WeedCSharpClient
             try
             {
                 var response = await _httpClient.GetAsync(absoluteUrl.ToString(), cts.Token);
+                var charset = response.Content.Headers.ContentType.CharSet;
                 if (response.StatusCode == HttpStatusCode.NotFound)
                 {
                     cts.Cancel();
