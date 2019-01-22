@@ -46,7 +46,7 @@ namespace WeedCSharpClient
         private WeedCSharpClientSubject() { }
         public static readonly WeedCSharpClientSubject Instance = new WeedCSharpClientSubject();
 
-        private readonly WeedCSharpClientImpl _weedCSharpClient = new WeedCSharpClientImpl(new Uri(WeedCSharpClient.Properties.Settings.Default.WeedMasterUrl));
+        private readonly WeedCSharpClientImpl _weedCSharpClient = new WeedCSharpClientImpl(new Uri(IpConst.MasterUrl));
 
         /// <summary>
         /// store or update the file content with byte array
@@ -157,6 +157,10 @@ namespace WeedCSharpClient
             {
                 var vid = long.Parse(fid.Split(',')[0]);
                 var url = await this.Lookup(vid);
+                if (url.Contains("127.0.0.1"))
+                {
+                    url = url.Replace("127.0.0.1", IpConst.Host);
+                }
                 readResult = await _weedCSharpClient.ReadFile($"{url}/{fid}");
                 if (!string.IsNullOrEmpty(readResult.filename))
                 {

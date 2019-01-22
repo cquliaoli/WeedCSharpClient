@@ -378,6 +378,10 @@ namespace WeedCSharpClient
             {
                 url.Append("http://");
             }
+            if (location.publicUrl.Contains("127.0.0.1"))
+            {
+                location.publicUrl = location.publicUrl.Replace("127.0.0.1", IpConst.Host);
+            }
             url.AppendFormat("{0}/{1}", location.publicUrl, file.Fid);
 
             if (file.Version > 0)
